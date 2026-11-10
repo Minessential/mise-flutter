@@ -132,9 +132,15 @@ With `Available` returning `main-aaa1111` and a request of `main`:
 - `mise upgrade --dry-run` said it would install `main-bbb2222` and prune
   `main-aaa1111` after 24 hours.
 
-Implication: for the moving `main` branch, listing immutable `main-<shortsha>`
-snapshots is better than a mutable `main` directory. It gives deterministic
-install directories, normal upgrade/prune behavior, and no fake checksums.
+Implication: for the moving `main` branch, listing immutable snapshots is
+better than a mutable `main` directory. It gives deterministic install
+directories, normal upgrade/prune behavior, and no fake checksums.
+
+Follow-up discovered during implementation: mise compares version strings, so a
+bare `main-<shortsha>` can sort lower than an older installed snapshot even
+when its commit is newer. The final design prefixes the UTC commit time:
+`main-<YYYYMMDDHHMMSS>-<shortsha>`. The fixture suite covers both ascending and
+descending hash orders.
 
 ### 3.6 Rolling channels use a stored checksum
 
@@ -383,7 +389,8 @@ could read `.fvmrc`, but it is not required for v1.
    arbitrary commits. Request classification decides which provider is used.
 3. **Channels as rolling directories; main as immutable snapshots.** `stable`
    and `beta` use `rolling = true` plus the archive SHA-256. `main` is exposed
-   as `main-<12-hex>` entries so normal prefix resolution, upgrades and pruning
+   as `main-<timestamp>-<12-hex>` entries so normal prefix resolution, upgrades
+   and pruning
    work.
 4. **No hash function in Lua.** Official SHA-256 comes from the release index
    and is verified by mise. Git installs are verified by checking out an exact
@@ -398,7 +405,7 @@ could read `.fvmrc`, but it is not required for v1.
 
 ## 7. Open questions carried into the design
 
-- Whether `mise lock` accepts a URL-less entry for `main-<sha>` in all current
+- Whether `mise lock` accepts a URL-less entry for `main-<timestamp>-<sha>` in all current
   mise versions. The design documents the limitation rather than relying on it.
 - Whether Windows mise creates shims for `.bat`-only tools in all supported
   versions. The Windows CI job must assert this.

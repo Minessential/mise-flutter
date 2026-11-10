@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Deterministic fixture integration tests"
+set -euo pipefail
+bash tests/integration.sh

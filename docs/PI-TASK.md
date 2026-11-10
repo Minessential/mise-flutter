@@ -17,7 +17,7 @@ Follow §12 of the design ("Implementation plan for pi"):
 
 1. Scaffold (`metadata.lua`, hooks, lib, license, mise config).
 2. Shared release/request/platform library.
-3. `Available` (stable, beta, exact versions, `main-<sha>` snapshots).
+3. `Available` (stable, beta, exact versions, `main-<timestamp>-<sha>` snapshots).
 4. `PreInstall` for official archives with the official SHA-256.
 5. `PostInstall` for archives, marker file.
 6. `EnvKeys` for Flutter and bundled Dart.
@@ -33,7 +33,7 @@ will run it.
 
 ## Non-negotiable behaviors
 
-- One plugin handles `stable`, `beta`, `main`, `main-<sha>`, `git-<sha>` and
+- One plugin handles `stable`, `beta`, `main`, `main-<timestamp>-<sha>`, `git-<sha>` and
   exact versions.
 - Official archives always use the `sha256` from `releases_<os>.json`; a
   tampered archive must fail.

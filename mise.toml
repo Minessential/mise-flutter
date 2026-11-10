@@ -1,0 +1,10 @@
+[env]
+MISE_USE_VERSIONS_HOST = "0"
+
+[tools]
+stylua = "2.3.1"
+actionlint = "1.7.7"
+shellcheck = "0.11.0"
+
+[tasks.ci]
+depends = ["lint", "test"]

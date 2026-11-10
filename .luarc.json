@@ -1,0 +1,7 @@
+{
+  "runtime.version": "Lua 5.1",
+  "runtime.path": ["?.lua", "lib/?.lua", "hooks/?.lua"],
+  "diagnostics.globals": ["PLUGIN", "RUNTIME"],
+  "diagnostics.disable": ["undefined-field"],
+  "workspace.checkThirdParty": false
+}

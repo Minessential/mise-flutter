@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+if [ "${FIXTURE_BOOTSTRAP_FAIL:-0}" = 1 ]; then
+  echo 'fixture bootstrap failed' >&2
+  exit 23
+fi
+case " $* " in
+  *' --machine '*)
+    mkdir -p bin/cache/dart-sdk
+    printf '7.7.8\n' > bin/cache/dart-sdk/version
+    printf '%s\n' '{"frameworkVersion":"9.9.9","dartSdkVersion":"7.7.8","frameworkRevision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","channel":"stable"}' > bin/cache/flutter.version.json
+    printf 'bootstrap\n' >> bootstrap-calls
+    printf '%s\n' '{"frameworkVersion":"9.9.9","dartSdkVersion":"7.7.8","frameworkRevision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","channel":"stable"}'
+    ;;
+  *) echo 'Flutter fixture 9.9.9' ;;
+esac

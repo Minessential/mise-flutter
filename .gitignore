@@ -1,3 +1,5 @@
-.scratch/
 .tmp/
-.DS_Store
+.scratch/
+mise.lock
+__pycache__/
+*.pyc

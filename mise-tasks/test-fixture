@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Run local fixtures without Flutter downloads"
+set -euo pipefail
+bash tests/integration.sh

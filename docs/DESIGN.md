@@ -14,7 +14,7 @@ Build **one Lua tool plugin** named `flutter`, distributed from a GitHub
 repository and installed with `[plugins]` / `mise plugins install`.
 
 - **Channels**: `stable` and `beta` are rolling channel directories backed by
-  official archives. `main` is exposed as immutable `main-<12-hex>` snapshots
+  official archives. `main` is exposed as immutable `main-<timestamp>-<12-hex>` snapshots
   resolved from `flutter/flutter` and installed with Git.
 - **Exact versions**: any stable/beta release published in the official release
   index, e.g. `3.47.9` or `3.50.0-0.4.pre`.
@@ -45,7 +45,7 @@ conflicts with this document, stop and record the conflict in
 | --- | --- | --- |
 | R1 | Stable support | `mise use flutter@stable`, `mise exec -- flutter --version` prints the current stable version; `mise upgrade` follows the channel |
 | R2 | Beta support | `mise use flutter@beta` installs the current beta; exact prerelease installs work |
-| R3 | Main support | `mise use flutter@main` resolves to `main-<sha>`, installs a shallow Git checkout, and later upgrades to a newer snapshot |
+| R3 | Main support | `mise use flutter@main` resolves to `main-<timestamp>-<sha>`, installs a shallow Git checkout, and later upgrades to a newer snapshot |
 | R4 | Specific Git commit | `mise use flutter@git-<sha>` installs that commit; released commits use the official archive and official SHA-256 |
 | R5 | macOS / Linux / Windows | Fixture integration tests pass on all three in CI; nightly real installs pass on all three |
 | R6 | Dart version auto-detection | `mise exec -- dart --version` reports the bundled Dart; `mise env` exposes the detected Dart version; no separate `dart` tool is required |
@@ -90,7 +90,7 @@ lockfile and upgrade logic.
 1. **`PreInstall` cannot rename the install directory.** Returning a concrete
    version does not change `installs/flutter/<requested>`. Channels therefore
    use either a channel directory (`stable`) or a snapshot-shaped version
-   (`main-<sha>`).
+   (`main-<timestamp>-<sha>`).
 2. **Lua has no hash function.** Official SHA-256 must come from the release
    index; Git installs rely on the commit hash.
 3. **`Available` receives no tool options.** Version listing must not depend on
@@ -109,7 +109,7 @@ request ──► classify
               ├─ exact release ─────────────► official archive provider
               ├─ git-<sha> (released) ──────► official archive provider
               ├─ git-<sha> (unreleased) ────► git provider
-              └─ main / main-<sha> ─────────► git provider
+              └─ main / main-<timestamp>-<sha> ─► git provider
 ```
 
 Both providers share the same request parser, platform resolver, install
@@ -127,8 +127,8 @@ installer script for channels.
 | `latest` | mise-resolved | newest stable release, e.g. `3.47.9` | official archive |
 | `stable` | rolling channel | `stable` | official archive (current stable) |
 | `beta` | rolling channel | `beta` | official archive (current beta) |
-| `main` | moving branch | `main-<12 hex>` when listing works; `main` as fallback | git |
-| `main-<12 hex>` | immutable snapshot | `main-<12 hex>` | git (or official archive if the commit is a release) |
+| `main` | moving branch | `main-<timestamp>-<12 hex>` when listing works; `main` as fallback | git |
+| `main-<timestamp>-<12 hex>` | immutable snapshot | the request string | git (or official archive if the commit is a release) |
 | `git-<7..40 hex>` | commit | `git-<normalized hex>` | official archive if released, else git |
 | `<release version>` | exact release | the version string, unchanged | official archive |
 | `dev` | rejected | — | error |
@@ -139,7 +139,7 @@ Notes:
   `3.50.0-0.4.pre`, and do not sort with a SemVer parser. Old releases are
   published as `v1.9.1+hotfix.6`; that is the string users must request.
 - `latest` is handled by mise's normal resolution. `Available` must list
-  channels and `main-<sha>` entries in a way that does not become mise's
+  channels and `main-<timestamp>-<sha>` entries in a way that does not become mise's
   "latest" (verified: mise picks the newest numeric stable version and skips
   prereleases).
 - Prereleases are hidden by `mise ls-remote` and prefix resolution. To install a
@@ -182,11 +182,14 @@ mise install --force flutter@stable
 ### 3.3 Why `main` is a snapshot
 
 `main` is a moving branch with no official archive and no checksum. Listing
-`main-<12 hex>` entries (from the GitHub API) gives:
+`main-<timestamp>-<12 hex>` entries (from the GitHub API) gives:
 
 - a deterministic install directory;
-- normal `mise outdated` / `mise upgrade` behavior (verified: the old snapshot
-  is pruned after 24 hours);
+- monotonic ordering: mise compares version strings, so the UTC commit
+  timestamp prefix makes a newer snapshot compare higher even when its commit
+  hash sorts lower than the installed one;
+- normal `mise outdated` / `mise upgrade` behavior (verified: upgrades work in
+  both hash directions and the old snapshot is pruned after 24 hours);
 - no fake checksum;
 - a version string that identifies the exact commit.
 
@@ -268,7 +271,7 @@ Rules:
 
 Used only for:
 
-- current `master` HEAD (`main-<sha>` snapshots);
+- current `master` HEAD (`main-<timestamp>-<sha>` snapshots);
 - resolving a short commit SHA to a full SHA.
 
 Endpoints:
@@ -290,9 +293,9 @@ and sets an API version header; do not implement token handling. Document
 
 Failure policy:
 
-- In `Available`: a failed HEAD lookup is a warning; omit the `main-<sha>`
+- In `Available`: a failed HEAD lookup is a warning; omit the `main-<timestamp>-<sha>`
   entry and still return stable/beta/versions.
-- In `PreInstall` for an explicit `main-<sha>` or short `git-<sha>`: failure is
+- In `PreInstall` for an explicit `main-<timestamp>-<sha>` or short `git-<sha>`: failure is
   an error, because the request cannot be resolved deterministically. Include
   the HTTP status and a hint about the token/rate limit.
 - Never print the token or the `Authorization` header.
@@ -399,7 +402,7 @@ the request itself).
 - Use the index order (already newest first); do not sort with `semver`.
 - Deduplicate by version after selecting the architecture, preserving the first
   occurrence.
-- Put channel entries first, then the `main-<sha>` snapshot, then releases. This
+- Put channel entries first, then the `main-<timestamp>-<sha>` snapshot, then releases. This
   is safe: mise's `latest` ignores non-numeric entries (verified).
 - `mise ls-remote` reverses the list for display, so channels appear last.
 
@@ -439,10 +442,14 @@ Behavior:
    Omit a channel if its current release has no archive for this platform.
 3. Try the GitHub API for `master`; on success add:
    ```lua
-   { version = "main-fffd8c22ae64", created_at = "2026-11-10T06:20:38Z" }
+   { version = "main-20261110062038-fffd8c22ae64" }
    ```
-   The SHA is the first 12 lowercase hex characters of the full SHA. Do not add
-   a literal `main` entry (it would shadow prefix resolution).
+   The timestamp is the commit's UTC committer time (`YYYYMMDDHHMMSS`) and the
+   suffix is the first 12 lowercase hex characters of the full SHA. Do not add
+   `created_at`: `main` is a moving branch, not a release, and a release-age
+   cooldown would hide the newest commit by default. The timestamp prefix gives
+   ordering without applying the cooldown. Do not add a literal `main` entry
+   (it would shadow prefix resolution).
 4. Add every stable/beta release version once, with `created_at =
    release_date`, newest first, using the architecture selection.
 5. Return the list.
@@ -470,7 +477,8 @@ Classifier:
 v = ctx.version
 if v == "dev": error("the dev channel is obsolete; use main or beta")
 if v == "stable" or v == "beta": channel flow
-if v matches ^main%-([0-9a-f]{12})$: main snapshot flow
+if v matches ^main%-(%d{14})%-([0-9a-f]{12})$: main snapshot flow
+    (legacy ^main%-([0-9a-f]{12})$ pins are accepted without upgrade ordering)
 if v == "main": main fallback flow (resolve HEAD, cache SHA, no URL unless released)
 if v matches ^git%-([0-9a-f]{7,40})$: commit flow
 else: exact release flow
@@ -509,7 +517,8 @@ Commit flow:
 
 Main snapshot flow:
 
-1. `main-<12>`: resolve the full SHA via `commits/<12>` (cache it). If the SHA
+1. `main-<timestamp>-<12>`: resolve the full SHA via `commits/<12>` (cache it)
+   and verify the timestamp equals the commit's UTC committer time. If the SHA
    matches a published release, use the archive path; otherwise return no URL.
 2. `main`: resolve `commits/master` to a full SHA, cache it, and use the
    archive path if the SHA matches a release (normally not). Otherwise return no
@@ -938,9 +947,9 @@ M.expected_dart_version(index, request)
 | Layer | What it proves | Cost | Runs |
 | --- | --- | --- | --- |
 | L1: resolution with a local fixture server | `Available`, channel/arch/commit selection, URL construction, checksum enforcement, `EnvKeys`, marker | seconds, no big downloads | every PR, all 3 OS |
-| L2: real index resolution | official URLs, current stable/beta, cross-platform lockfiles, no download | seconds | every PR (Linux + macOS) |
+| L2: real index resolution | official URLs, current stable/beta, cross-platform lockfiles; archive downloads blocked | seconds | every PR (Linux + macOS) |
 | L3: real install | actual 1.6–2.3 GB download, extraction, bootstrap, `flutter --version`, `dart --version` | 5–15 min per OS | nightly / manual |
-| L4: upgrade | `stable` rolling checksum and `main-<sha>` snapshot upgrade | heavy | nightly/manual, optional |
+| L4: upgrade | `stable` rolling checksum and `main-<timestamp>-<sha>` snapshot upgrade | heavy | nightly/manual, optional |
 
 ### 10.2 Isolated environment
 
@@ -1045,8 +1054,12 @@ grep -q 'sha256:' mise.lock
 grep -q 'https://storage.googleapis.com/flutter_infra_release/releases/' mise.lock
 ```
 
-`mise lock` calls `PreInstall` for each platform without downloading. This is
-the cheapest way to test cross-platform URL and checksum selection.
+`mise lock` calls `PreInstall` for each platform. On mise 2026.11.4 it then
+downloads each platform's archive to hash it, ignoring the hook checksum, so the
+test blocks archive URLs with `MISE_URL_REPLACEMENTS`. The lockfile still proves
+the URL/checksum selection; the blocked GET count is a known mise limitation,
+not a plugin failure. Never run an unguarded cross-platform lock in CI: four
+platforms can download several gigabytes.
 
 Also assert:
 
@@ -1090,7 +1103,7 @@ the plugin checkout.
 - `stable`: install, then `mise upgrade flutter` after a new release; at least
   assert `mise outdated` compares checksums without errors.
 - `main`: install `main`, then `mise upgrade flutter` and assert a new
-  `main-<sha>` directory, with the old one scheduled for pruning. The fixture
+  `main-<timestamp>-<sha>` directory, with the old one scheduled for pruning. The fixture
   test can cover this deterministically by changing the fixture's `main` SHA.
 
 ### 10.7 Windows-specific checks
@@ -1118,7 +1131,7 @@ mise exec -- flutter --version
 
 # Main
 mise use flutter@main
-mise ls flutter                 # shows main-<sha>
+mise ls flutter                 # shows main-<timestamp>-<sha>
 mise exec -- flutter --version  # 0.0.0-unknown is acceptable
 
 # Commit (released)
@@ -1243,7 +1256,7 @@ Files: `hooks/available.lua`, library helpers.
 Acceptance:
 
 - Fixture `mise ls-remote flutter` shows stable, beta, versions and the
-  `main-<sha>` entry from a stub API.
+  `main-<timestamp>-<sha>` entry from a stub API.
 - Real `mise ls-remote flutter` shows 3.47.9 and stable.
 - No `dev` entries.
 - Network failure produces a clear error; GitHub failure does not break stable.
@@ -1300,7 +1313,7 @@ Files: `hooks/available.lua`, `hooks/pre_install.lua`.
 
 Acceptance:
 
-- `mise ls-remote flutter` shows one `main-<12>` entry when the API works.
+- `mise ls-remote flutter` shows one `main-<timestamp>-<12>` entry when the API works.
 - `mise install flutter@main` resolves to it.
 - `mise outdated`/`mise upgrade --dry-run` recognizes a newer snapshot.
 - API failure hides the snapshot and does not break stable.
@@ -1382,7 +1395,7 @@ The README must contain these sections, in this order:
    built-in `http:flutter` backend. To go back, `mise plugins uninstall
    flutter`."
    Add the name-collision note with `mise-plugins/mise-flutter`.
-5. **Usage** — a table of `stable`, `beta`, `main`, `main-<sha>`,
+5. **Usage** — a table of `stable`, `beta`, `main`, `main-<timestamp>-<sha>`,
    `git-<sha>`, exact, plus examples. Mention `--pin` / exact versions for
    reproducible CI.
 6. **Dart** — explain the bundled Dart, `dart --version`, `DART_SDK`,
