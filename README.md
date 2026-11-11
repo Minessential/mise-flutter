@@ -243,6 +243,39 @@ configured. Remove it from your mise config and use `flutter` only.
 
 ## Configuration
 
+### IDE SDK paths
+
+Install the project's configured Flutter version with `mise install` before
+configuring your IDE. `mise where flutter` returns the selected Flutter SDK
+root; use this directory when an IDE asks for the Flutter SDK path.
+
+#### VS Code
+
+With the Dart and Flutter extensions installed, add this to the project's
+`.vscode/settings.json` to resolve the SDK through mise:
+
+```json
+{
+  "dart.getFlutterSdkCommand": {
+    "executable": "mise",
+    "args": ["where", "flutter"]
+  }
+}
+```
+
+Ensure `mise` is available on VS Code's `PATH`, or set `executable` to the
+absolute path of the mise executable. Remove any fixed `dart.flutterSdkPath`
+setting so it does not override command-based SDK discovery. After changing
+the project's Flutter version, run **Developer: Reload Window** to refresh
+SDK discovery.
+
+#### Android Studio / IntelliJ IDEA and other IDEs
+
+Run `mise where flutter` from the project directory and copy its output into
+the IDE's **Flutter SDK path** field. Select the SDK root, without appending
+`bin` or `bin/flutter`. Update the path if you switch to a version installed
+in a different directory.
+
 ### Tool options
 
 | Option | Type | Default | Description |
