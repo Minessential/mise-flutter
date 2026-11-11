@@ -21,6 +21,7 @@ expect_failure() {
   grep -Fiq "$message" "$TEST_DIR/error" || { tail -30 "$TEST_DIR/error"; fail "missing error: $message"; }
 }
 assert_py() { "$PYTHON" "$REPO/tests/lib/assertions.py" "$@"; }
+head_of() { git -C "$1" rev-parse HEAD | tr -d '\r\n'; }
 project() {
   rm -f mise.lock
   printf '[tools]\nflutter = { version = "%s", bootstrap = %s }\n' "$1" "${2:-false}" > mise.toml
@@ -148,15 +149,18 @@ expect_failure 'HTTP 404' env FLUTTER_STORAGE_BASE_URL="http://127.0.0.1:$port/a
 # Real local commits: later timestamps, first ascending then descending SHA order.
 "$PYTHON" "$REPO/tests/fixtures/git_repo.py" "$TEST_DIR/git" "$TEST_DIR/storage" "$GIT_CONFIG_GLOBAL"
 read -r first second third < <("$PYTHON" -c 'import json,sys; print(*json.load(open(sys.argv[1])))' "$TEST_DIR/git/commits.json")
+first=${first%$'\r'}
+second=${second%$'\r'}
+third=${third%$'\r'}
 mise install "flutter@git-${first:0:7}" "flutter@git-$third"
-[[ $(git -C "$MISE_DATA_DIR/installs/flutter/git-${first:0:7}" rev-parse HEAD) = "$first" ]]
+[[ $(head_of "$MISE_DATA_DIR/installs/flutter/git-${first:0:7}") = "$first" ]]
 assert_py marker "$MISE_DATA_DIR/installs/flutter/git-${first:0:7}" git false
 api="$TEST_DIR/storage/api/repos/flutter/flutter/commits"
 snapshots=("main-20200101000000-${first:0:12}" "main-20200102000000-${second:0:12}" "main-20200103000000-${third:0:12}")
 project main
 mise cache clear flutter
 mise install
-[[ $(git -C "$MISE_DATA_DIR/installs/flutter/${snapshots[0]}" rev-parse HEAD) = "$first" ]]
+[[ $(head_of "$MISE_DATA_DIR/installs/flutter/${snapshots[0]}") = "$first" ]]
 for i in 1 2; do
   snapshot=${snapshots[$i]}
   cp "$api/${snapshot##*-}" "$api/master"
@@ -167,7 +171,8 @@ for i in 1 2; do
   grep -q "$snapshot" upgrade.txt
   mise upgrade flutter
   assert_py marker "$MISE_DATA_DIR/installs/flutter/$snapshot" git false
-  [[ $(git -C "$MISE_DATA_DIR/installs/flutter/$snapshot" rev-parse HEAD) = "$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))[int(sys.argv[2])])' "$TEST_DIR/git/commits.json" "$i")" ]]
+  expected=$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))[int(sys.argv[2])])' "$TEST_DIR/git/commits.json" "$i" | tr -d '\r\n')
+  [[ $(head_of "$MISE_DATA_DIR/installs/flutter/$snapshot") = "$expected" ]]
 done
 expect_failure 'timestamp does not match' mise install "flutter@main-20200104000000-${third:0:12}"
 # Old undated pins remain valid, but only dated snapshots participate in upgrades.
@@ -188,7 +193,7 @@ mkdir -p "$MISE_CACHE_DIR/plugins/flutter"
 printf '{"sha":"%s"}\n' "$first" > "$MISE_CACHE_DIR/plugins/flutter/commit-master.json"
 mise install flutter@main
 assert_py marker "$MISE_DATA_DIR/installs/flutter/main" git false
-[[ $(git -C "$MISE_DATA_DIR/installs/flutter/main" rev-parse HEAD) = "$third" ]]
+[[ $(head_of "$MISE_DATA_DIR/installs/flutter/main") = "$third" ]]
 expect_failure 'HTTP 404' mise install flutter@git-ddddddd
 
 # Legacy file opt-in, force, prune and space/parenthesis-safe cwd handling.
@@ -213,6 +218,6 @@ grep -q 'Flutter fixture 9.9.9' flutter-version
 grep -q '7.7.8' dart-version
 assert_py marker "$MISE_DATA_DIR/installs/flutter/stable" archive true
 mise install "flutter@git-$third"
-[[ $(git -C "$MISE_DATA_DIR/installs/flutter/git-$third" rev-parse HEAD) = "$third" ]]
+[[ $(head_of "$MISE_DATA_DIR/installs/flutter/git-$third") = "$third" ]]
 mise uninstall flutter@stable "flutter@git-$third"
 printf '\nPASS: fixture integration (resolution, checksums, Git, env, repair, locks, paths)\n'
