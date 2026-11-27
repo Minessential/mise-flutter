@@ -1188,7 +1188,7 @@ it out of the Windows-critical path.
   `jdx/mise-action@v2`, `bash tests/integration.sh` (Windows uses Git Bash).
 - `real-index` job: Ubuntu + macOS; isolated env; `mise lock` cross-platform;
   assert URLs/checksums; no big downloads.
-- `real-install` job: `schedule` (nightly) and `workflow_dispatch`; matrix all
+- `real-install` job: `workflow_dispatch` only (no scheduled run); matrix all
   three OS; isolated env; pinned Flutter; run the L3 assertions; cache
   `MISE_DATA_DIR`/`MISE_CACHE_DIR`.
 - Permissions: `contents: read` by default. Do not use secrets in PR jobs.
